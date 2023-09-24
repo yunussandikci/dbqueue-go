@@ -21,5 +21,5 @@ type Message struct {
 	Id             string `gorm:"primarykey"`
 	Payload        []byte
 	AvailableAfter time.Time
-	Priority       uint8
+	Priority       uint32
 }

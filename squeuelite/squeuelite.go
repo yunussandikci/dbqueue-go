@@ -16,6 +16,9 @@ func (s *SQueueLite) Put(message *Message) error {
 	if message.Id == "" {
 		message.Id = uuid.NewString()
 	}
+	if message.AvailableAfter.IsZero() {
+		message.AvailableAfter = time.Now()
+	}
 
 	return s.getConnection().Clauses(clause.Insert{Modifier: "OR IGNORE"}).Create(message).Error
 }
@@ -23,11 +26,14 @@ func (s *SQueueLite) Put(message *Message) error {
 func (s *SQueueLite) Pop() (*Message, error) {
 	var messages []Message
 
-	getErr := s.getConnection().Model(&messages).
+	getErr := s.getConnection().
+		Model(&messages).
 		Clauses(clause.Returning{}).
 		Where("id = (?)",
-			s.getConnection().Model(Message{}).Where("available_after < ?", time.Now()).
+			s.getConnection().
+				Where("available_after < ?", time.Now()).
 				Select("id").
+				Order("priority desc").
 				Limit(1)).
 		Update("available_after", time.Now().Add(s.requeueDuration)).Error
 
