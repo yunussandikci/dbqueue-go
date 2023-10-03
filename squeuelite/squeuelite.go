@@ -1,67 +1,85 @@
 package squeuelite
 
 import (
-	"fmt"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"strings"
 	"time"
 )
 
-func (s *SQueueLite) getConnection() *gorm.DB {
-	return s.db.Table(fmt.Sprintf("queue_%s", s.queue))
-}
-
-func (s *SQueueLite) Put(message *Message) error {
-	if message.Id == "" {
-		message.Id = uuid.NewString()
-	}
-	if message.AvailableAfter.IsZero() {
-		message.AvailableAfter = time.Now()
+func (s *SQueueLite) CreateQueue(name string) error {
+	migrateErr := s.db.Table(name).AutoMigrate(&Message{})
+	if migrateErr != nil && !strings.Contains(migrateErr.Error(), "already exist") {
+		return migrateErr
 	}
 
-	return s.getConnection().Clauses(clause.Insert{Modifier: "OR IGNORE"}).Create(message).Error
+	return nil
 }
 
-func (s *SQueueLite) Pop() (*Message, error) {
-	var messages []Message
-
-	getErr := s.getConnection().
-		Model(&messages).
-		Clauses(clause.Returning{}).
-		Where("id = (?)",
-			s.getConnection().
-				Where("available_after < ?", time.Now()).
-				Select("id").
-				Order("priority desc").
-				Limit(1)).
-		Update("available_after", time.Now().Add(s.requeueDuration)).Error
-
-	if len(messages) > 0 {
-		return &messages[0], nil
-	}
-
-	return nil, getErr
+func (s *SQueueLite) SendMessage(queue string, message *Message) error {
+	return s.SendMessageBatch(queue, []*Message{message})
 }
 
-func (s *SQueueLite) Subscribe(pollingInterval time.Duration) <-chan Message {
-	subscription := make(chan Message)
-
-	go func() {
-		for {
-			message, popErr := s.Pop()
-			if popErr != nil || message == nil {
-				time.Sleep(pollingInterval)
-				continue
-			}
-
-			subscription <- *message
+func (s *SQueueLite) SendMessageBatch(queue string, messages []*Message) error {
+	for _, message := range messages {
+		if message.Id == "" {
+			message.Id = uuid.NewString()
 		}
-	}()
+		if message.VisibleAfter.IsZero() {
+			message.VisibleAfter = time.Now()
+		}
+	}
 
-	return subscription
+	return s.db.Table(queue).Clauses(clause.Insert{Modifier: "OR IGNORE"}).Create(messages).Error
 }
 
-func (s *SQueueLite) Done(message Message) error {
-	return s.getConnection().Delete(&message).Error
+func (s *SQueueLite) DeleteMessage(queue string, messageId string) error {
+	return s.DeleteMessageBatch(queue, []string{messageId})
+}
+
+func (s *SQueueLite) DeleteMessageBatch(queue string, messageIds []string) error {
+	return s.db.Table(queue).Delete(&Message{}, messageIds).Error
+}
+
+func (s *SQueueLite) ReceiveMessage(queue string, f func(message Message), options ReceiveMessageOptions) error {
+	for {
+		var messages []Message
+
+		getErr := s.db.Table(queue).
+			Model(&messages).
+			Clauses(clause.Returning{}).
+			Where("id = (?)",
+				s.db.Table(queue).
+					Where("visible_after < ?", time.Now()).
+					Select("id").
+					Order("priority desc").
+					Limit(options.GetMaxNumberOfMessages())).
+			Updates(map[string]interface{}{
+				"visible_after": time.Now().Add(options.GetVisibilityTimeout()),
+				"retry":         gorm.Expr("retry + ?", 1),
+			}).Error
+
+		if getErr != nil {
+			return getErr
+		}
+
+		if len(messages) == 0 {
+			time.Sleep(options.GetWaitTime())
+			continue
+		}
+
+		for _, message := range messages {
+			f(message)
+		}
+	}
+}
+
+func (s *SQueueLite) PurgeQueue(queue string) error {
+	return s.db.Table(queue).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Message{}).Error
+}
+
+func (s *SQueueLite) ChangeMessageVisibility(queue string, visibilityTimeout time.Duration, messageId string) error {
+	return s.db.Table(queue).Model(&Message{}).Where("id = ?", messageId).
+		Update("visible_after", time.Now().Add(visibilityTimeout)).Error
 }

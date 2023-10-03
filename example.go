@@ -4,44 +4,45 @@ import (
 	"fmt"
 	"github.com/yunussandikci/squeuelite-go/squeuelite"
 	"math/rand"
-	"strconv"
 	"time"
 )
 
 func main() {
-	squeue, queueErr := squeuelite.New(squeuelite.Config{
-		Database:        "my-db",
-		Queue:           "default",
-		RequeueDuration: time.Minute,
-	})
+	squeue, queueErr := squeuelite.New("my-db")
 	if queueErr != nil {
 		panic(queueErr)
 	}
 
-	//Put items into Queue
+	//Create Queue
+	if createQueueErr := squeue.CreateQueue("messages"); createQueueErr != nil {
+		panic(createQueueErr)
+	}
+
+	//Send items into Queue
 	for i := 1; i < 100; i++ {
-		if putErr := squeue.Put(&squeuelite.Message{
-			Id:             strconv.Itoa(i),
-			Payload:        []byte(fmt.Sprintf("my-message-%d", i)),
-			AvailableAfter: time.Now().Add(2 * time.Second),
-			Priority:       rand.Uint32(),
+		if putErr := squeue.SendMessage("messages", &squeuelite.Message{
+			Payload:  []byte(fmt.Sprintf("message-%d", i)),
+			Priority: rand.Uint32() % 100,
 		}); putErr != nil {
 			panic(putErr)
 		}
 	}
 
 	//Subscribe for Queue
-	go func() {
-		for item := range squeue.Subscribe(time.Second) {
-			fmt.Printf("%s\n", string(item.Payload))
+	if receiverErr := squeue.ReceiveMessage("messages", func(message squeuelite.Message) {
+		fmt.Printf("Payload:%s Priority:%d Retry:%d\n", string(message.Payload), message.Priority, message.Retry)
 
-			//Delete item from Queue
-			if doneErr := squeue.Done(item); doneErr != nil {
-				return
+		// Delete Messages Randomly
+		if rand.Intn(100) > 40 {
+			if deleteErr := squeue.DeleteMessage("messages", message.Id); deleteErr != nil {
+				panic(deleteErr)
 			}
 		}
-	}()
+	}, squeuelite.ReceiveMessageOptions{
+		VisibilityTimeout: 5 * time.Second,
+		WaitTime:          time.Second,
+	}); receiverErr != nil {
+		panic(receiverErr)
+	}
 
-	//Wait Forever
-	select {}
 }
