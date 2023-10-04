@@ -13,7 +13,7 @@ go get github.com/yunussandikci/squeuelite-go
 Then, import the `squeuelite` package in your Go file:
 
 ```go
-import "github.com/yunussandikci/squeuelite-go"
+import "github.com/yunussandikci/squeuelite-go/squeuelite"
 ```
 
 ## 🎉 Usage
