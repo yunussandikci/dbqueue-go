@@ -1,27 +1,34 @@
-# SQueueLite-Go
+# dbqueue-go
 
-SQueueLite-Go is a simple, lightweight queue system implemented in Go. It uses SQLite as its database backend.
+dbqueue-go is a simple, lightweight queue system based on database, implemented in Go. 
 
 ## 🚀 Getting Started
 
-To start using SQueueLite-Go, simply run the following command in your terminal:
+To start using dbqueue-go, simply run the following command in your terminal:
 
 ```bash
-go get github.com/yunussandikci/squeuelite-go
+go get github.com/yunussandikci/dbqueue-go
 ```
 
-Then, import the `squeuelite` package in your Go file:
+Then, import the `dbqueue` package in your Go file:
 
 ```go
-import "github.com/yunussandikci/squeuelite-go/squeuelite"
+import "github.com/yunussandikci/dbqueue-go/dbqueue"
 ```
 
 ## 🎉 Usage
 
-### Creating a Queue
+### Creating an Instance 
+```go
+sqliteQueue, err := dbqueue.NewSQLite("foo.db")
+mysqlQueue, err := dbqueue.NewMySQL("foo:bar@tcp(127.0.0.1:3306)/baz")
+postgresqlQueue, err := dbqueue.NewPostgreSQL("host=localhost user=foo password=bar dbname=baz port=5432 sslmode=disable")
+```
+
+### Creating the Queue 
 
 ```go
-err := squeuelite.CreateQueue("my_queue")
+err := dbqueue.CreateQueue("my_queue")
 ```
 The `CreateQueue` function takes one argument:
 - `name`: The name of the queue to be created.
@@ -29,11 +36,11 @@ The `CreateQueue` function takes one argument:
 ### Sending Messages
 
 ```go
-message := &squeuelite.Message{
+message := &dbqueue.Message{
     Payload: []byte("Hello, world!"),
 }
 
-err := squeuelite.SendMessage("my_queue", message)
+err := dbqueue.SendMessage("my_queue", message)
 ```
 The `SendMessage` function takes two arguments:
 - `queue`: The name of the queue to which the message will be sent.
@@ -42,13 +49,13 @@ The `SendMessage` function takes two arguments:
 ### Receiving Messages
 
 ```go
-options := &squeuelite.ReceiveMessageOptions{
+options := &dbqueue.ReceiveMessageOptions{
     MaxNumberOfMessages: 10,
     VisibilityTimeout:   time.Minute * 10,
     WaitTime:            time.Second * 5,
 }
 
-err := squeuelite.ReceiveMessage("my_queue", func(message squeuelite.Message) {
+err := dbqueue.ReceiveMessage("my_queue", func(message dbqueue.Message) {
     fmt.Println(string(message.Payload))
 }, options)
 ```
@@ -60,7 +67,7 @@ The `ReceiveMessage` function takes three arguments:
 ### Deleting Messages
 
 ```go
-err := squeuelite.DeleteMessage("my_queue", "message_id")
+err := dbqueue.DeleteMessage("my_queue", "message_id")
 ```
 The `DeleteMessage` function takes two arguments:
 - `queue`: The name of the queue from which the message will be deleted.
@@ -69,7 +76,7 @@ The `DeleteMessage` function takes two arguments:
 ### Purging a Queue
 
 ```go
-err := squeuelite.PurgeQueue("my_queue")
+err := dbqueue.PurgeQueue("my_queue")
 ```
 The `PurgeQueue` function takes one argument:
 - `queue`: The name of the queue to be purged.
@@ -77,7 +84,7 @@ The `PurgeQueue` function takes one argument:
 ### Changing Message Visibility
 
 ```go
-err := squeuelite.ChangeMessageVisibility("my_queue", time.Minute*5, "message_id")
+err := dbqueue.ChangeMessageVisibility("my_queue", time.Minute*5, "message_id")
 ```
 The `ChangeMessageVisibility` function takes three arguments:
 - `queue`: The name of the queue that contains the message.
