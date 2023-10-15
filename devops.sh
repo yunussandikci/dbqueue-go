@@ -11,19 +11,9 @@ prerequisites() {
     fi
 }
 
-generate() {
-  find . -type f -name '*.pb.go' -exec rm {} ';'
-  find . -type f -name '*.proto' -exec protoc --go_out=. --go-grpc_out=require_unimplemented_servers=false:. {} ';'
-}
-
 lint() {
   gofumpt -l -w .
   golangci-lint run --timeout=10m
-}
-
-build_and_push() {
-  docker buildx build --push --platform linux/arm64 --tag yunussandikci/shopping-tracker:latest \
-    --build-arg GITHUB_TOKEN="${LIB_REPO_GITHUB_TOKEN}" .
 }
 
 prerequisites
