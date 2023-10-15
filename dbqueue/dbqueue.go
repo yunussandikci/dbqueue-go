@@ -54,8 +54,8 @@ func (s *DBQueue) ReceiveMessage(queue string, fun func(message Message), option
 		var messages []Message
 
 		if s.useTransaction {
-			if txErr := s.db.Transaction(func(transaction *gorm.DB) error {
-				if findErr := transaction.Table(queue).
+			if txErr := s.db.Transaction(func(trx *gorm.DB) error {
+				if findErr := trx.Table(queue).
 					Clauses(clause.Locking{
 						Strength: "UPDATE",
 						Options:  "SKIP LOCKED",
@@ -71,7 +71,7 @@ func (s *DBQueue) ReceiveMessage(queue string, fun func(message Message), option
 					tmpItem.VisibleAfter = time.Now().Add(options.GetVisibilityTimeout()).Unix()
 					tmpItem.Retry++
 
-					if updateErr := transaction.Table(queue).Updates(&tmpItem).Error; updateErr != nil {
+					if updateErr := trx.Table(queue).Updates(&tmpItem).Error; updateErr != nil {
 						return updateErr
 					}
 				}
