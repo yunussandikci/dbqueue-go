@@ -2,47 +2,63 @@ package main
 
 import (
 	"fmt"
-	"github.com/yunussandikci/squeuelite-go/squeuelite"
-	"math/rand"
 	"time"
+
+	"github.com/yunussandikci/dbqueue-go/dbqueue"
 )
 
 func main() {
-	squeue, queueErr := squeuelite.New("my-db")
+	// dbQueue, queueErr := dbqueue.NewPostgreSQL("host=localhost user=postgres password=postgres dbname=mydb port=5432 sslmode=disable")
+	// dbQueue, queueErr := dbqueue.NewSQLite("hello.db")
+	dbQueue, queueErr := dbqueue.NewMySQL("root:root@tcp(127.0.0.1:3306)/mydb")
 	if queueErr != nil {
 		panic(queueErr)
 	}
 
-	//Create Queue
-	if createQueueErr := squeue.CreateQueue("messages"); createQueueErr != nil {
+	// Create Queue
+	if createQueueErr := dbQueue.CreateQueue("my-queue"); createQueueErr != nil {
 		panic(createQueueErr)
 	}
 
-	//Send items into Queue
+	// Send items into Queue
 	for i := 1; i < 100; i++ {
-		if putErr := squeue.SendMessage("messages", &squeuelite.Message{
-			Payload:  []byte(fmt.Sprintf("message-%d", i)),
-			Priority: rand.Uint32() % 100,
+		if putErr := dbQueue.SendMessage("my-queue", &dbqueue.Message{
+			Payload: []byte(fmt.Sprintf("message-%d", i)),
 		}); putErr != nil {
 			panic(putErr)
 		}
 	}
 
-	//Subscribe for Queue
-	if receiverErr := squeue.ReceiveMessage("messages", func(message squeuelite.Message) {
-		fmt.Printf("Payload:%s Priority:%d Retry:%d\n", string(message.Payload), message.Priority, message.Retry)
+	go func() {
+		if receiverErr := dbQueue.ReceiveMessage("my-queue", func(message dbqueue.Message) {
+			fmt.Printf("A Payload:%s Priority:%d Retry:%d\n", string(message.Payload), message.Priority, message.Retry)
 
-		// Delete Messages Randomly
-		if rand.Intn(100) > 40 {
-			if deleteErr := squeue.DeleteMessage("messages", message.Id); deleteErr != nil {
+			// Delete Messages
+			if deleteErr := dbQueue.DeleteMessage("my-queue", message.ID); deleteErr != nil {
 				panic(deleteErr)
 			}
+		}, dbqueue.ReceiveMessageOptions{
+			VisibilityTimeout: time.Minute * 10,
+			WaitTime:          0,
+		}); receiverErr != nil {
+			panic(receiverErr)
 		}
-	}, squeuelite.ReceiveMessageOptions{
-		VisibilityTimeout: 5 * time.Second,
-		WaitTime:          time.Second,
-	}); receiverErr != nil {
-		panic(receiverErr)
-	}
+	}()
+	go func() {
+		if receiverErr := dbQueue.ReceiveMessage("my-queue", func(message dbqueue.Message) {
+			fmt.Printf("B Payload:%s Priority:%d Retry:%d\n", string(message.Payload), message.Priority, message.Retry)
 
+			// Delete Messages
+			if deleteErr := dbQueue.DeleteMessage("my-queue", message.ID); deleteErr != nil {
+				panic(deleteErr)
+			}
+		}, dbqueue.ReceiveMessageOptions{
+			VisibilityTimeout: time.Minute * 10,
+			WaitTime:          0,
+		}); receiverErr != nil {
+			panic(receiverErr)
+		}
+	}()
+
+	select {}
 }

@@ -1,20 +1,22 @@
-package squeuelite
+package dbqueue
 
 import (
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
 )
 
-type SQueueLite struct {
-	db *gorm.DB
+type DBQueue struct {
+	db             *gorm.DB
+	useTransaction bool
 }
 
 type Message struct {
-	Id           string `gorm:"primarykey"`
+	ID           string `gorm:"primarykey"`
 	Payload      []byte
 	Retry        uint32
 	Priority     uint32
-	VisibleAfter time.Time
+	VisibleAfter int64
 }
 
 type ReceiveMessageOptions struct {

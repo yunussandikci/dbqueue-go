@@ -1,0 +1,16 @@
+linters:
+  enable-all: true
+  disable:
+    - exhaustruct
+    - exhaustivestruct
+    - wrapcheck
+    - ireturn
+    - depguard
+    - gomnd
+    - forcetypeassert
+    - funlen
+run:
+  go: '1.21'
+  tests: false
+  skip-files:
+    - example.go
