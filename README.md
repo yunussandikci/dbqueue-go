@@ -1,6 +1,6 @@
 # dbqueue-go
 
-dbqueue-go is a simple, lightweight queue system based on database, implemented in Go. 
+dbqueue-go is a simple, lightweight queue system based on various of sql databases, implemented in Go. 
 
 ## 🚀 Getting Started
 
