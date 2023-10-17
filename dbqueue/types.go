@@ -7,22 +7,33 @@ import (
 )
 
 type DBQueue struct {
-	db             *gorm.DB
-	useTransaction bool
+	db *gorm.DB
+}
+
+func (s *DBQueue) isMySQL() bool {
+	return s.db.Config.Dialector.Name() == "mysql"
+}
+
+func (s *DBQueue) isSQLite() bool {
+	return s.db.Config.Dialector.Name() == "sqlite"
+}
+
+func (s *DBQueue) isPostgreSQL() bool {
+	return s.db.Config.Dialector.Name() == "postgresql"
 }
 
 type Message struct {
 	ID           string `gorm:"primarykey"`
 	Payload      []byte
-	Retry        uint32
+	Retry        int32
 	Priority     uint32
 	VisibleAfter int64
 }
 
 type ReceiveMessageOptions struct {
-	MaxNumberOfMessages int
 	VisibilityTimeout   time.Duration
 	WaitTime            time.Duration
+	MaxNumberOfMessages int
 }
 
 func (r *ReceiveMessageOptions) GetMaxNumberOfMessages() int {

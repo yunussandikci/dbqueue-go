@@ -2,63 +2,64 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/yunussandikci/dbqueue-go/dbqueue"
 )
 
 func main() {
-	// dbQueue, queueErr := dbqueue.NewPostgreSQL("host=localhost user=postgres password=postgres dbname=mydb port=5432 sslmode=disable")
-	// dbQueue, queueErr := dbqueue.NewSQLite("hello.db")
-	dbQueue, queueErr := dbqueue.NewMySQL("root:root@tcp(127.0.0.1:3306)/mydb")
+	before := time.Now()
+	//queue, queueErr := dbqueue.NewPostgreSQL("host=localhost user=postgres password=postgres dbname=mydb port=5432 sslmode=disable")
+	//queue, queueErr := dbqueue.NewMySQL("root:root@tcp(127.0.0.1:3306)/mydb")
+	queue, queueErr := dbqueue.NewSQLite("my.db")
 	if queueErr != nil {
 		panic(queueErr)
 	}
 
-	// Create Queue
-	if createQueueErr := dbQueue.CreateQueue("my-queue"); createQueueErr != nil {
+	if createQueueErr := queue.CreateQueue("jobs"); createQueueErr != nil {
 		panic(createQueueErr)
 	}
 
-	// Send items into Queue
-	for i := 1; i < 100; i++ {
-		if putErr := dbQueue.SendMessage("my-queue", &dbqueue.Message{
+	Producer(queue, "jobs")
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		tmpI := i
+		go func() {
+			Consumer(queue, fmt.Sprintf("Consumer %d", tmpI), "jobs")
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	fmt.Println(time.Since(before))
+}
+
+func Producer(queue *dbqueue.DBQueue, queueName string) {
+	for i := 1; i < 1000; i++ {
+		if putErr := queue.SendMessage(queueName, &dbqueue.Message{
 			Payload: []byte(fmt.Sprintf("message-%d", i)),
 		}); putErr != nil {
 			panic(putErr)
 		}
 	}
+}
 
-	go func() {
-		if receiverErr := dbQueue.ReceiveMessage("my-queue", func(message dbqueue.Message) {
-			fmt.Printf("A Payload:%s Priority:%d Retry:%d\n", string(message.Payload), message.Priority, message.Retry)
+func Consumer(queue *dbqueue.DBQueue, consumerName, queueName string) {
+	options := dbqueue.ReceiveMessageOptions{
+		VisibilityTimeout:   time.Minute * 10,
+		MaxNumberOfMessages: 1,
+		WaitTime:            0,
+	}
 
-			// Delete Messages
-			if deleteErr := dbQueue.DeleteMessage("my-queue", message.ID); deleteErr != nil {
-				panic(deleteErr)
-			}
-		}, dbqueue.ReceiveMessageOptions{
-			VisibilityTimeout: time.Minute * 10,
-			WaitTime:          0,
-		}); receiverErr != nil {
-			panic(receiverErr)
+	if receiveErr := queue.ReceiveMessage(queueName, func(message dbqueue.Message) {
+		fmt.Printf("%s %+v\n", consumerName, message)
+		if deleteErr := queue.DeleteMessage(queueName, message.ID); deleteErr != nil {
+			panic(deleteErr)
 		}
-	}()
-	go func() {
-		if receiverErr := dbQueue.ReceiveMessage("my-queue", func(message dbqueue.Message) {
-			fmt.Printf("B Payload:%s Priority:%d Retry:%d\n", string(message.Payload), message.Priority, message.Retry)
-
-			// Delete Messages
-			if deleteErr := dbQueue.DeleteMessage("my-queue", message.ID); deleteErr != nil {
-				panic(deleteErr)
-			}
-		}, dbqueue.ReceiveMessageOptions{
-			VisibilityTimeout: time.Minute * 10,
-			WaitTime:          0,
-		}); receiverErr != nil {
-			panic(receiverErr)
-		}
-	}()
-
-	select {}
+	}, options); receiveErr != nil {
+		panic(receiveErr)
+	}
 }
