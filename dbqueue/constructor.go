@@ -9,35 +9,19 @@ import (
 )
 
 func NewSQLite(dsn string) (*DBQueue, error) {
-	database, openErr := gorm.Open(sqlite.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if openErr != nil {
-		return nil, openErr
-	}
-
-	return &DBQueue{
-		db:             database,
-		useTransaction: false,
-	}, nil
+	return New(sqlite.Open(dsn))
 }
 
 func NewPostgreSQL(dsn string) (*DBQueue, error) {
-	database, openErr := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if openErr != nil {
-		return nil, openErr
-	}
-
-	return &DBQueue{
-		db:             database,
-		useTransaction: false,
-	}, nil
+	return New(postgres.Open(dsn))
 }
 
 func NewMySQL(dsn string) (*DBQueue, error) {
-	database, openErr := gorm.Open(mysql.Open(dsn), &gorm.Config{
+	return New(mysql.Open(dsn))
+}
+
+func New(dialector gorm.Dialector) (*DBQueue, error) {
+	database, openErr := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if openErr != nil {
@@ -45,7 +29,6 @@ func NewMySQL(dsn string) (*DBQueue, error) {
 	}
 
 	return &DBQueue{
-		db:             database,
-		useTransaction: true,
+		db: database,
 	}, nil
 }

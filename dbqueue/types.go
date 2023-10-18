@@ -7,16 +7,21 @@ import (
 )
 
 type DBQueue struct {
-	db             *gorm.DB
-	useTransaction bool
+	db *gorm.DB
+}
+
+func (s *DBQueue) isMySQL() bool {
+	return s.db.Config.Dialector.Name() == "mysql"
 }
 
 type Message struct {
-	ID           string `gorm:"primarykey"`
-	Payload      []byte
-	Retry        uint32
-	Priority     uint32
-	VisibleAfter int64
+	ID              uint   `gorm:"primarykey"`
+	DeduplicationID string `gorm:"unique"`
+	Payload         []byte
+	Retry           int32
+	Priority        uint32
+	VisibleAfter    int64
+	CreatedAt       int64
 }
 
 type ReceiveMessageOptions struct {
