@@ -18,8 +18,8 @@ type Message struct {
 	ID              uint   `gorm:"primarykey"`
 	DeduplicationID string `gorm:"unique"`
 	Payload         []byte
-	Retry           int32
 	Priority        uint32
+	Retrieval       int32
 	VisibleAfter    int64
 	CreatedAt       int64
 }

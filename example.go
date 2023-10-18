@@ -18,15 +18,6 @@ func main() {
 	if createQueueErr := queue.CreateQueue("jobs"); createQueueErr != nil {
 		panic(createQueueErr)
 	}
-	for i := 1; i < 100; i++ {
-		err := queue.SendMessage("jobs", &dbqueue.Message{
-			DeduplicationID: "asd",
-			Payload:         []byte(fmt.Sprintf("message-1")),
-		})
-		if err != nil {
-			panic(err)
-		}
-	}
 
 	Producer(queue, "jobs")
 	go Consumer(queue, "A", "jobs")
@@ -56,7 +47,7 @@ func Consumer(queue *dbqueue.DBQueue, consumerName, queueName string) {
 		fmt.Printf("Consumer:%s %+v\n", consumerName, message)
 
 		// Delete Randomly to test Visibility Timeout
-		//if rand.Intn(100) > 20 {
+		// if rand.Intn(100) > 20 {
 		if deleteErr := queue.DeleteMessage(queueName, message.ID); deleteErr != nil {
 			panic(deleteErr)
 		}
