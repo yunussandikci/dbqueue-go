@@ -10,10 +10,6 @@ type DBQueue struct {
 	db *gorm.DB
 }
 
-func (s *DBQueue) isMySQL() bool {
-	return s.db.Config.Dialector.Name() == "mysql"
-}
-
 type Message struct {
 	ID              uint   `gorm:"primarykey"`
 	DeduplicationID string `gorm:"unique"`

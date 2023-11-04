@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
-	queue, queueErr := dbqueue.NewPostgreSQL("host=localhost user=postgres password=postgres dbname=mydb port=5432 sslmode=disable")
+	// queue, queueErr := dbqueue.NewPostgreSQL("host=localhost user=postgres password=postgres dbname=mydb port=5432 sslmode=disable")
 	// queue, queueErr := dbqueue.NewMySQL("root:root@tcp(127.0.0.1:3306)/mydb")
-	// queue, queueErr := dbqueue.NewSQLite("my.db")
+	queue, queueErr := dbqueue.NewSQLite("my.db")
 	if queueErr != nil {
 		panic(queueErr)
 	}

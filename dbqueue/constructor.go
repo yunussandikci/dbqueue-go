@@ -1,7 +1,6 @@
 package dbqueue
 
 import (
-	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -14,10 +13,6 @@ func NewSQLite(dsn string) (*DBQueue, error) {
 
 func NewPostgreSQL(dsn string) (*DBQueue, error) {
 	return New(postgres.Open(dsn))
-}
-
-func NewMySQL(dsn string) (*DBQueue, error) {
-	return New(mysql.Open(dsn))
 }
 
 func New(dialector gorm.Dialector) (*DBQueue, error) {

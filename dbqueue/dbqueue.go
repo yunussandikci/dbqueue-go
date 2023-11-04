@@ -11,14 +11,8 @@ import (
 )
 
 func (s *DBQueue) ReceiveMessage(queue string, fun func(message Message), options ReceiveMessageOptions) error {
-	receiveFunc := s.receiveMessageReturning
-
-	if s.isMySQL() {
-		receiveFunc = s.receiveMessageTransactional
-	}
-
 	for {
-		messages, receiverErr := receiveFunc(queue, options)
+		messages, receiverErr := s.receiveMessageReturning(queue, options)
 		if receiverErr != nil {
 			return receiverErr
 		}
