@@ -16,10 +16,10 @@ import (
 	"time"
 )
 
-func TestPostgreSQL_10k(t *testing.T) {
+func Test_PostgreSQL_10kMessage_1Receiver_1Sender(t *testing.T) {
 	ctx := context.Background()
-	postgres, runErr := postgres.Run(ctx, "docker.io/postgres:16", postgres.WithDatabase("test_db"),
-		postgres.WithUsername("test_user"), postgres.WithPassword("test_password"),
+	postgres, runErr := postgres.Run(ctx, "docker.io/postgres:16", postgres.WithDatabase("test"),
+		postgres.WithUsername("test"), postgres.WithPassword("test"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").
 			WithOccurrence(2).WithStartupTimeout(5*time.Second)),
 	)
@@ -28,13 +28,10 @@ func TestPostgreSQL_10k(t *testing.T) {
 	}
 	db := postgres.MustConnectionString(ctx)
 
-	test(t, 1, 1, db,
-		10000, types.ReceiveMessageOptions{
-			MaxNumberOfMessages: common.Ptr(1),
-		})
+	testSendReceiveDelete(t, 1, 1, 10000, db)
 }
 
-func TestPostgreSQL_10k_Async(t *testing.T) {
+func Test_PostgreSQL_10kMessage_5Receiver_5Sender(t *testing.T) {
 	ctx := context.Background()
 	postgres, runErr := postgres.Run(ctx, "docker.io/postgres:16", postgres.WithDatabase("test"),
 		postgres.WithUsername("test"), postgres.WithPassword("test"),
@@ -45,37 +42,28 @@ func TestPostgreSQL_10k_Async(t *testing.T) {
 		t.Fatal(runErr)
 	}
 
-	test(t, 5, 5, postgres.MustConnectionString(ctx),
-		10000, types.ReceiveMessageOptions{
-			MaxNumberOfMessages: common.Ptr(1),
-		})
+	testSendReceiveDelete(t, 5, 5, 10000, postgres.MustConnectionString(ctx))
 }
 
-func TestSQLite_10k_Sync(t *testing.T) {
+func Test_SQLite_10kMessage_1Receiver_1Sender(t *testing.T) {
 	db, dbErr := os.CreateTemp("", "")
 	if dbErr != nil {
 		t.Fatal(dbErr)
 	}
 
-	test(t, 1, 1, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()),
-		10000, types.ReceiveMessageOptions{
-			MaxNumberOfMessages: common.Ptr(1),
-		})
+	testSendReceiveDelete(t, 1, 1, 10000, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()))
 }
 
-func TestSQLite_10k_Async(t *testing.T) {
+func Test_SQLite_10kMessage_5Receiver_5Sender(t *testing.T) {
 	db, dbErr := os.CreateTemp("", "")
 	if dbErr != nil {
 		t.Fatal(dbErr)
 	}
 
-	test(t, 5, 5, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()),
-		10000, types.ReceiveMessageOptions{
-			MaxNumberOfMessages: common.Ptr(1),
-		})
+	testSendReceiveDelete(t, 5, 5, 10000, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()))
 }
 
-func test(t *testing.T, receiverCount, senderCount int, db string, limit int, options types.ReceiveMessageOptions) {
+func testSendReceiveDelete(t *testing.T, receiverCount, senderCount, limit int, db string) {
 	now := time.Now()
 	ctx := context.Background()
 	engine, connectErr := Connect(ctx, db)
@@ -114,7 +102,9 @@ func test(t *testing.T, receiverCount, senderCount int, db string, limit int, op
 			if count == uint64(limit) {
 				close(receiveFinished)
 			}
-		}, options)
+		}, types.ReceiveMessageOptions{
+			MaxNumberOfMessages: common.Ptr(1),
+		})
 	}
 
 	for i := 0; i < receiverCount; i++ {
