@@ -3,6 +3,6 @@ package types
 import "errors"
 
 var (
-	ErrQueueNotFound      = errors.New("queue not found")
-	ErrEngineNotSupported = errors.New("engine not supported")
+	ErrQueueNotFound        = errors.New("queue not found")
+	ErrDatabaseNotSupported = errors.New("database not supported")
 )

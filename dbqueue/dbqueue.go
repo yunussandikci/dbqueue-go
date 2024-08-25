@@ -8,9 +8,12 @@ import (
 )
 
 func Connect(ctx context.Context, connString string) (types.Engine, error) {
-	if strings.Contains(connString, "postgres") {
+	switch {
+	case strings.Contains(connString, "postgres"):
 		return engines.NewPostgreSQLEngine(ctx, connString)
+	case strings.Contains(connString, "sqlite"):
+		return engines.NewSQLiteEngine(ctx, connString)
+	default:
+		return nil, types.ErrDatabaseNotSupported
 	}
-
-	return nil, types.ErrEngineNotSupported
 }

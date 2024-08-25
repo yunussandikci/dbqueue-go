@@ -26,7 +26,7 @@ func NewPostgreSQLEngine(ctx context.Context, conn string) (types.Engine, error)
 	}
 	return &postgreSQLEngine{
 		db: db,
-	}, newErr
+	}, nil
 }
 
 func (p *postgreSQLEngine) OpenQueue(name string) (types.Queue, error) {
@@ -78,8 +78,9 @@ func (p *postgreSQLEngine) PurgeQueue(name string) error {
 }
 
 func (p *postgreSQLQueue) ReceiveMessage(fun func(message types.ReceivedMessage), options types.ReceiveMessageOptions) error {
-	limit := strconv.Itoa(options.MaxNumberOfMessages)
-	if options.MaxNumberOfMessages == 0 {
+	opts := options.Defaults()
+	limit := strconv.Itoa(*opts.MaxNumberOfMessages)
+	if *opts.MaxNumberOfMessages == 0 {
 		limit = "ALL"
 	}
 
@@ -94,7 +95,7 @@ func (p *postgreSQLQueue) ReceiveMessage(fun func(message types.ReceivedMessage)
 			LIMIT %s
 		)
 		RETURNING id, deduplication_id, payload, priority, visible_after, retrieval, created_at;`,
-			p.table, time.Now().Add(options.VisibilityTimeout).Unix(), p.table, time.Now().Unix(), limit)
+			p.table, time.Now().Add(*opts.VisibilityTimeout).Unix(), p.table, time.Now().Unix(), limit)
 
 		rows, queryErr := p.db.Query(context.Background(), query)
 		if queryErr != nil {
@@ -117,9 +118,8 @@ func (p *postgreSQLQueue) ReceiveMessage(fun func(message types.ReceivedMessage)
 		}
 
 		rows.Close()
-
 		if rowCount == 0 {
-			time.Sleep(options.WaitTime)
+			time.Sleep(*opts.WaitTime)
 		}
 	}
 }
@@ -129,24 +129,20 @@ func (p *postgreSQLQueue) SendMessage(message *types.Message) error {
 }
 
 func (p *postgreSQLQueue) SendMessageBatch(messages []*types.Message) error {
-
 	batch := &pgx.Batch{}
 	for _, message := range messages {
-		deduplicationID := message.DeduplicationID
-		if len(message.DeduplicationID) == 0 {
+		var deduplicationID string
+		if message.DeduplicationID != nil {
+			deduplicationID = *message.DeduplicationID
+		} else {
 			deduplicationID = uuid.NewString()
-		}
-
-		visibleAfter := strconv.FormatInt(message.VisibleAfter, 10)
-		if message.VisibleAfter == 0 {
-			visibleAfter = "DEFAULT"
 		}
 
 		query := fmt.Sprintf(`INSERT INTO %s 
 			(deduplication_id, payload, priority, visible_after) 
-			VALUES ('%s', '%s', %d, %s)
+			VALUES ('%s', '%s', %d, %d)
 			ON CONFLICT (deduplication_id) DO NOTHING;`,
-			p.table, deduplicationID, message.Payload, message.Priority, visibleAfter)
+			p.table, deduplicationID, message.Payload, message.Priority, message.VisibleAfter)
 
 		batch.Queue(query)
 	}
