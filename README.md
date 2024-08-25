@@ -1,10 +1,11 @@
-# dbqueue-go
 
-dbqueue-go is a simple, lightweight queue system based on various of sql databases, implemented in Go. 
+# DBQueue-Go
+
+DBQueue-Go is a simple, lightweight queue system based on various SQL databases, implemented in Go. It supports MySQL, PostgreSQL, and SQLite, allowing for easy integration with existing database infrastructures.
 
 ## 🚀 Getting Started
 
-To start using dbqueue-go, simply run the following command in your terminal:
+To start using DBQueue-Go, simply run the following command in your terminal:
 
 ```bash
 go get github.com/yunussandikci/dbqueue-go
@@ -18,78 +19,115 @@ import "github.com/yunussandikci/dbqueue-go/dbqueue"
 
 ## 🎉 Usage
 
-### Creating an Instance 
-```go
-sqliteQueue, err := dbqueue.NewSQLite("foo.db")
-mysqlQueue, err := dbqueue.NewMySQL("foo:bar@tcp(127.0.0.1:3306)/baz")
-postgresqlQueue, err := dbqueue.NewPostgreSQL("host=localhost user=foo password=bar dbname=baz port=5432 sslmode=disable")
-```
+### Opening a Database Connection
 
-### Creating the Queue 
+To work with DBQueue-Go, you need to open a connection to your preferred SQL database engine:
 
 ```go
-err := dbqueue.CreateQueue("my_queue")
+postgresqlEngine, _ := dbqueue.OpenPostgreSQL(ctx, "host=localhost user=foo password=bar dbname=baz port=5432 sslmode=disable")
+mysqlEngine, _ := dbqueue.OpenMySQL(ctx, "foo:bar@tcp(127.0.0.1:3306)/baz")
+sqliteEngine, _ := dbqueue.OpenSQLite(ctx, "foo.db")
 ```
-The `CreateQueue` function takes one argument:
-- `name`: The name of the queue to be created.
+
+### Creating a Queue
+
+Create a new queue using the engine:
+
+```go
+queue, _ := postgresqlEngine.CreateQueue(ctx, "my_queue")
+```
 
 ### Sending Messages
 
-```go
-message := &dbqueue.Message{
-    Payload: []byte("Hello, world!"),
-}
+To send a message to the queue:
 
-err := dbqueue.SendMessage("my_queue", message)
+```go
+_ = queue.SendMessage(ctx, &types.Message{
+    Payload:  []byte("Hello, world!"),
+    Priority: 1,
+})
 ```
-The `SendMessage` function takes two arguments:
-- `queue`: The name of the queue to which the message will be sent.
-- `message`: The message to be sent. It's an instance of the `Message` struct.
+
+### Sending Messages in Batch
+
+You can also send multiple messages at once:
+
+```go
+_ = queue.SendMessageBatch(ctx, []*types.Message{
+    {Payload: []byte("Message 1"), Priority: 1},
+    {Payload: []byte("Message 2"), Priority: 1},
+})
+```
 
 ### Receiving Messages
 
-```go
-options := &dbqueue.ReceiveMessageOptions{
-    MaxNumberOfMessages: 10,
-    VisibilityTimeout:   time.Minute * 10,
-    WaitTime:            time.Second * 5,
-}
+Receive messages from the queue:
 
-err := dbqueue.ReceiveMessage("my_queue", func(message dbqueue.Message) {
-    fmt.Println(string(message.Payload))
-}, options)
+```go
+_ = queue.ReceiveMessage(ctx, func(message types.ReceivedMessage) {
+    fmt.Println("Received message:", string(message.Payload))
+}, &types.ReceiveMessageOptions{
+    MaxNumberOfMessages: common.Ptr(10),
+    VisibilityTimeout:   common.Ptr(30 * time.Second),
+    WaitTime:            common.Ptr(5 * time.Second),
+})
 ```
-The `ReceiveMessage` function takes three arguments:
-- `queue`: The name of the queue from which the messages will be received.
-- `f`: A function that will be called for each received message. It takes a `Message` as an argument.
-- `options`: An instance of the `ReceiveMessageOptions` struct that specifies options for receiving messages.
 
 ### Deleting Messages
 
-```go
-err := dbqueue.DeleteMessage("my_queue", "message_id")
-```
-The `DeleteMessage` function takes two arguments:
-- `queue`: The name of the queue from which the message will be deleted.
-- `messageId`: The ID of the message to be deleted.
-
-### Purging a Queue
+Delete a specific message from the queue:
 
 ```go
-err := dbqueue.PurgeQueue("my_queue")
+_ = queue.DeleteMessage(ctx, messageID)
 ```
-The `PurgeQueue` function takes one argument:
-- `queue`: The name of the queue to be purged.
+
+You can also delete multiple messages at once:
+
+```go
+_ = queue.DeleteMessageBatch(ctx, []uint{messageID1, messageID2})
+```
 
 ### Changing Message Visibility
 
+Change the visibility timeout of a message:
+
 ```go
-err := dbqueue.ChangeMessageVisibility("my_queue", time.Minute*5, "message_id")
+_ = queue.ChangeMessageVisibility(ctx, messageID, time.Minute*5)
 ```
-The `ChangeMessageVisibility` function takes three arguments:
-- `queue`: The name of the queue that contains the message.
-- `visibilityTimeout`: The new visibility timeout for the message.
-- `messageId`: The ID of the message whose visibility will be changed. 
+
+This can also be done in batch:
+
+```go
+_ = queue.ChangeMessageVisibilityBatch(ctx, []uint{messageID1, messageID2}, time.Minute*5)
+```
+
+### Deleting a Queue
+
+Delete a queue if it is no longer needed:
+
+```go
+_ = engineInstance.DeleteQueue(ctx, "my_queue")
+```
+
+### Purging a Queue
+
+Purge all messages from a queue:
+
+```go
+_ = engineInstance.PurgeQueue(ctx, "my_queue")
+```
+
+## 🤝 Contributing
+
+Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+### Issues
+
+If you encounter any bugs or have suggestions for improvements, please feel free to [open an issue](https://github.com/yunussandikci/dbqueue-go/issues). Your feedback is invaluable and helps us improve the project.
+
+### Pull Requests
+
+We welcome pull requests for new features, bug fixes, or documentation improvements. Here’s how you can contribute:
 
 ## 📜 License
 
