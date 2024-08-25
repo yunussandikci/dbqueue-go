@@ -56,8 +56,8 @@ func (p *postgreSQLEngine) CreateQueue(ctx context.Context, name string) (types.
 				payload BYTEA,
 				priority INTEGER DEFAULT 0,
 				retrieval INTEGER DEFAULT 0,
-				visible_after BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()),
-				created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()));`, name)
+				visible_after BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+				created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()));`, name)
 	_, execErr := p.db.Exec(ctx, query)
 	return &postgreSQLQueue{
 		db:    p.db,

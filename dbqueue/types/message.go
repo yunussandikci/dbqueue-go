@@ -15,8 +15,8 @@ type Message struct {
 type ReceivedMessage struct {
 	Message
 	ID        uint
-	Retrieval *int32
-	CreatedAt *int64
+	Retrieval uint32
+	CreatedAt int64
 }
 
 type ReceiveMessageOptions struct {
