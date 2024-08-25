@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func TestPostgreSQL_10k_Sync(t *testing.T) {
+func TestPostgreSQL_10k(t *testing.T) {
 	ctx := context.Background()
 	postgres, runErr := postgres.Run(ctx, "docker.io/postgres:16", postgres.WithDatabase("test_db"),
 		postgres.WithUsername("test_user"), postgres.WithPassword("test_password"),
@@ -28,9 +28,10 @@ func TestPostgreSQL_10k_Sync(t *testing.T) {
 	}
 	db := postgres.MustConnectionString(ctx)
 
-	test(t, false, db, 10000, types.ReceiveMessageOptions{
-		MaxNumberOfMessages: common.Ptr(1),
-	})
+	test(t, 1, 1, db,
+		10000, types.ReceiveMessageOptions{
+			MaxNumberOfMessages: common.Ptr(1),
+		})
 }
 
 func TestPostgreSQL_10k_Async(t *testing.T) {
@@ -44,34 +45,37 @@ func TestPostgreSQL_10k_Async(t *testing.T) {
 		t.Fatal(runErr)
 	}
 
-	test(t, true, postgres.MustConnectionString(ctx), 10000, types.ReceiveMessageOptions{
-		MaxNumberOfMessages: common.Ptr(1),
-	})
+	test(t, 5, 5, postgres.MustConnectionString(ctx),
+		10000, types.ReceiveMessageOptions{
+			MaxNumberOfMessages: common.Ptr(1),
+		})
 }
 
 func TestSQLite_10k_Sync(t *testing.T) {
-	db, dbErr := os.CreateTemp("", "testdb")
+	db, dbErr := os.CreateTemp("", "")
 	if dbErr != nil {
 		t.Fatal(dbErr)
 	}
 
-	test(t, false, db.Name(), 10000, types.ReceiveMessageOptions{
-		MaxNumberOfMessages: common.Ptr(1),
-	})
+	test(t, 1, 1, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()),
+		10000, types.ReceiveMessageOptions{
+			MaxNumberOfMessages: common.Ptr(1),
+		})
 }
 
 func TestSQLite_10k_Async(t *testing.T) {
-	db, dbErr := os.CreateTemp("", "testdb")
+	db, dbErr := os.CreateTemp("", "")
 	if dbErr != nil {
 		t.Fatal(dbErr)
 	}
 
-	test(t, true, db.Name(), 10000, types.ReceiveMessageOptions{
-		MaxNumberOfMessages: common.Ptr(1),
-	})
+	test(t, 5, 5, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()),
+		10000, types.ReceiveMessageOptions{
+			MaxNumberOfMessages: common.Ptr(1),
+		})
 }
 
-func test(t *testing.T, async bool, db string, limit int, options types.ReceiveMessageOptions) {
+func test(t *testing.T, receiverCount, senderCount int, db string, limit int, options types.ReceiveMessageOptions) {
 	now := time.Now()
 	ctx := context.Background()
 	engine, connectErr := Connect(ctx, db)
@@ -83,22 +87,21 @@ func test(t *testing.T, async bool, db string, limit int, options types.ReceiveM
 		t.Fatal(createErr)
 	}
 
-	sender := func() {
-		for i := 1; i <= limit; i++ {
+	sender := func(num int) {
+		for i := 1; i <= limit/senderCount; i++ {
 			sendErr := queue.SendMessage(&types.Message{
 				Payload: []byte(strconv.Itoa(i)),
 			})
 			assert.NoError(t, sendErr)
-			if i%1000 == 0 {
-				fmt.Printf("Sent %d/%d\n", i, limit)
+			if i%((limit/senderCount)/10) == 0 {
+				fmt.Printf("[SENDER %d]: %d/%d\n", num, i, limit/senderCount)
 			}
 		}
 	}
 
 	receiveCounter := atomic.Uint64{}
 	receiveFinished := make(chan bool)
-	receiver := func() {
-		var ()
+	receiver := func(num int) {
 		_ = queue.ReceiveMessage(func(message types.ReceivedMessage) {
 			if deleteErr := queue.DeleteMessage(message.ID); deleteErr != nil {
 				assert.NoError(t, deleteErr)
@@ -106,7 +109,7 @@ func test(t *testing.T, async bool, db string, limit int, options types.ReceiveM
 			receiveCounter.Add(1)
 			count := receiveCounter.Load()
 			if count%1000 == 0 {
-				fmt.Printf("Processed %d/%d\n", count, limit)
+				fmt.Printf("[RECEIVER %d]: %d/%d\n", num, count, limit)
 			}
 			if count == uint64(limit) {
 				close(receiveFinished)
@@ -114,12 +117,11 @@ func test(t *testing.T, async bool, db string, limit int, options types.ReceiveM
 		}, options)
 	}
 
-	if async {
-		go sender()
-		go receiver()
-	} else {
-		sender()
-		go receiver()
+	for i := 0; i < receiverCount; i++ {
+		go receiver(i)
+	}
+	for i := 0; i < senderCount; i++ {
+		go sender(i)
 	}
 
 	<-receiveFinished
