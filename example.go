@@ -1,58 +1,50 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"time"
-
 	"github.com/yunussandikci/dbqueue-go/dbqueue"
+	"github.com/yunussandikci/dbqueue-go/dbqueue/types"
 )
 
 func main() {
-	queue, queueErr := dbqueue.NewPostgreSQL("host=localhost user=postgres password=postgres dbname=mydb port=5432 sslmode=disable")
-	// queue, queueErr := dbqueue.NewMySQL("root:root@tcp(127.0.0.1:3306)/mydb")
-	// queue, queueErr := dbqueue.NewSQLite("my.db")
-	if queueErr != nil {
-		panic(queueErr)
+	//db := "postgres://postgres:root@localhost/example"
+	db := "example.db"
+
+	ctx := context.Background()
+	engine, connectErr := dbqueue.OpenSQLite(ctx, db)
+	if connectErr != nil {
+		panic(connectErr)
 	}
 
-	if createQueueErr := queue.CreateQueue("jobs"); createQueueErr != nil {
-		panic(createQueueErr)
+	queue1, createErr := engine.CreateQueue(ctx, "example")
+	if createErr != nil {
+		panic(createErr)
 	}
 
-	Producer(queue, "jobs")
-	go Consumer(queue, "A", "jobs")
-	go Consumer(queue, "B", "jobs")
+	go func() {
+		for i := 0; i < 100000; i++ {
+			sendErr := queue1.SendMessage(ctx, &types.Message{
+				Payload: []byte(fmt.Sprintf("Hello, %d", i)),
+			})
+			if sendErr != nil {
+				panic(sendErr)
+			}
+		}
+	}()
+
+	go func() {
+		receiverErr := queue1.ReceiveMessage(ctx, func(message types.ReceivedMessage) {
+			fmt.Println(string(message.Payload))
+			deleteErr := queue1.DeleteMessage(ctx, message.ID)
+			if deleteErr != nil {
+				panic(deleteErr)
+			}
+		}, types.ReceiveMessageOptions{})
+		if receiverErr != nil {
+			panic(receiverErr)
+		}
+	}()
 
 	select {}
-}
-
-func Producer(queue *dbqueue.DBQueue, queueName string) {
-	for i := 1; i < 1000; i++ {
-		if putErr := queue.SendMessage(queueName, &dbqueue.Message{
-			Payload: []byte(fmt.Sprintf("message-%d", i)),
-		}); putErr != nil {
-			panic(putErr)
-		}
-	}
-}
-
-func Consumer(queue *dbqueue.DBQueue, consumerName, queueName string) {
-	options := dbqueue.ReceiveMessageOptions{
-		VisibilityTimeout:   time.Second * 10,
-		MaxNumberOfMessages: 1,
-		WaitTime:            0,
-	}
-
-	if receiveErr := queue.ReceiveMessage(queueName, func(message dbqueue.Message) {
-		fmt.Printf("Consumer:%s %+v\n", consumerName, message)
-
-		// Delete Randomly to test Visibility Timeout
-		// if rand.Intn(100) > 20 {
-		if deleteErr := queue.DeleteMessage(queueName, message.ID); deleteErr != nil {
-			panic(deleteErr)
-		}
-		//}
-	}, options); receiveErr != nil {
-		panic(receiveErr)
-	}
 }
