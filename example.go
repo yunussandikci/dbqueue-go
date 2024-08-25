@@ -12,19 +12,19 @@ func main() {
 	db := "example.db"
 
 	ctx := context.Background()
-	engine, connectErr := dbqueue.Connect(ctx, db)
+	engine, connectErr := dbqueue.OpenSQLite(ctx, db)
 	if connectErr != nil {
 		panic(connectErr)
 	}
 
-	queue1, createErr := engine.CreateQueue("example")
+	queue1, createErr := engine.CreateQueue(ctx, "example")
 	if createErr != nil {
 		panic(createErr)
 	}
 
 	go func() {
 		for i := 0; i < 100000; i++ {
-			sendErr := queue1.SendMessage(&types.Message{
+			sendErr := queue1.SendMessage(ctx, &types.Message{
 				Payload: []byte(fmt.Sprintf("Hello, %d", i)),
 			})
 			if sendErr != nil {
@@ -34,9 +34,9 @@ func main() {
 	}()
 
 	go func() {
-		receiverErr := queue1.ReceiveMessage(func(message types.ReceivedMessage) {
+		receiverErr := queue1.ReceiveMessage(ctx, func(message types.ReceivedMessage) {
 			fmt.Println(string(message.Payload))
-			deleteErr := queue1.DeleteMessage(message.ID)
+			deleteErr := queue1.DeleteMessage(ctx, message.ID)
 			if deleteErr != nil {
 				panic(deleteErr)
 			}
