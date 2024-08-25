@@ -1,13 +1,16 @@
 package types
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Queue interface {
-	ReceiveMessage(fun func(message ReceivedMessage), options ReceiveMessageOptions) error
-	SendMessage(message *Message) error
-	SendMessageBatch(messages []*Message) error
-	DeleteMessage(id uint) error
-	DeleteMessageBatch(ids []uint) error
-	ChangeMessageVisibility(id uint, visibilityTimeout time.Duration) error
-	ChangeMessageVisibilityBatch(ids []uint, visibilityTimeout time.Duration) error
+	ReceiveMessage(ctx context.Context, fun func(message ReceivedMessage), options ReceiveMessageOptions) error
+	SendMessage(ctx context.Context, message *Message) error
+	SendMessageBatch(ctx context.Context, messages []*Message) error
+	DeleteMessage(ctx context.Context, id uint) error
+	DeleteMessageBatch(ctx context.Context, ids []uint) error
+	ChangeMessageVisibility(ctx context.Context, id uint, visibilityTimeout time.Duration) error
+	ChangeMessageVisibilityBatch(ctx context.Context, ids []uint, visibilityTimeout time.Duration) error
 }

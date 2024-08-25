@@ -28,7 +28,7 @@ func Test_PostgreSQL_10kMessage_1Receiver_1Sender(t *testing.T) {
 	}
 	db := postgres.MustConnectionString(ctx)
 
-	testSendReceiveDelete(t, 1, 1, 10000, db)
+	test(t, 1, 1, 10000, db)
 }
 
 func Test_PostgreSQL_10kMessage_5Receiver_5Sender(t *testing.T) {
@@ -42,7 +42,7 @@ func Test_PostgreSQL_10kMessage_5Receiver_5Sender(t *testing.T) {
 		t.Fatal(runErr)
 	}
 
-	testSendReceiveDelete(t, 5, 5, 10000, postgres.MustConnectionString(ctx))
+	test(t, 5, 5, 10000, postgres.MustConnectionString(ctx))
 }
 
 func Test_SQLite_10kMessage_1Receiver_1Sender(t *testing.T) {
@@ -51,7 +51,7 @@ func Test_SQLite_10kMessage_1Receiver_1Sender(t *testing.T) {
 		t.Fatal(dbErr)
 	}
 
-	testSendReceiveDelete(t, 1, 1, 10000, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()))
+	test(t, 1, 1, 10000, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()))
 }
 
 func Test_SQLite_10kMessage_5Receiver_5Sender(t *testing.T) {
@@ -60,24 +60,24 @@ func Test_SQLite_10kMessage_5Receiver_5Sender(t *testing.T) {
 		t.Fatal(dbErr)
 	}
 
-	testSendReceiveDelete(t, 5, 5, 10000, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()))
+	test(t, 5, 5, 10000, fmt.Sprintf("file:%s?_journal_mode=WAL", db.Name()))
 }
 
-func testSendReceiveDelete(t *testing.T, receiverCount, senderCount, limit int, db string) {
+func test(t *testing.T, receiverCount, senderCount, limit int, db string) {
 	now := time.Now()
 	ctx := context.Background()
 	engine, connectErr := Connect(ctx, db)
 	if connectErr != nil {
 		t.Fatal(connectErr)
 	}
-	queue, createErr := engine.CreateQueue("test")
+	queue, createErr := engine.CreateQueue(ctx, "test")
 	if createErr != nil {
 		t.Fatal(createErr)
 	}
 
 	sender := func(num int) {
 		for i := 1; i <= limit/senderCount; i++ {
-			sendErr := queue.SendMessage(&types.Message{
+			sendErr := queue.SendMessage(ctx, &types.Message{
 				Payload: []byte(strconv.Itoa(i)),
 			})
 			assert.NoError(t, sendErr)
@@ -90,8 +90,8 @@ func testSendReceiveDelete(t *testing.T, receiverCount, senderCount, limit int, 
 	receiveCounter := atomic.Uint64{}
 	receiveFinished := make(chan bool)
 	receiver := func(num int) {
-		_ = queue.ReceiveMessage(func(message types.ReceivedMessage) {
-			if deleteErr := queue.DeleteMessage(message.ID); deleteErr != nil {
+		_ = queue.ReceiveMessage(ctx, func(message types.ReceivedMessage) {
+			if deleteErr := queue.DeleteMessage(ctx, message.ID); deleteErr != nil {
 				assert.NoError(t, deleteErr)
 			}
 			receiveCounter.Add(1)
@@ -116,6 +116,6 @@ func testSendReceiveDelete(t *testing.T, receiverCount, senderCount, limit int, 
 
 	<-receiveFinished
 
-	assert.NoError(t, engine.DeleteQueue("test"))
+	assert.NoError(t, engine.DeleteQueue(ctx, "test"))
 	fmt.Printf("%d messages processed in %s\n", limit, time.Since(now))
 }

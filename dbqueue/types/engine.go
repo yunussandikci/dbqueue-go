@@ -1,8 +1,10 @@
 package types
 
+import "context"
+
 type Engine interface {
-	OpenQueue(name string) (Queue, error)
-	CreateQueue(name string) (Queue, error)
-	DeleteQueue(name string) error
-	PurgeQueue(name string) error
+	OpenQueue(ctx context.Context, name string) (Queue, error)
+	CreateQueue(ctx context.Context, name string) (Queue, error)
+	DeleteQueue(ctx context.Context, name string) error
+	PurgeQueue(ctx context.Context, name string) error
 }

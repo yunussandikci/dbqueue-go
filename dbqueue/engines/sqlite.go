@@ -20,7 +20,7 @@ type sqliteQueue struct {
 	table string
 }
 
-func NewSQLiteEngine(ctx context.Context, conn string) (types.Engine, error) {
+func NewSQLiteEngine(_ context.Context, conn string) (types.Engine, error) {
 	db, newErr := sql.Open("sqlite3", conn)
 	if newErr != nil {
 		return nil, newErr
@@ -30,10 +30,10 @@ func NewSQLiteEngine(ctx context.Context, conn string) (types.Engine, error) {
 	}, nil
 }
 
-func (p *sqliteEngine) OpenQueue(name string) (types.Queue, error) {
+func (p *sqliteEngine) OpenQueue(ctx context.Context, name string) (types.Queue, error) {
 	var exists int
 	query := `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?;`
-	if queryErr := p.db.QueryRowContext(context.Background(), query, name).Scan(&exists); queryErr != nil {
+	if queryErr := p.db.QueryRowContext(ctx, query, name).Scan(&exists); queryErr != nil {
 		return nil, queryErr
 	}
 
@@ -47,7 +47,7 @@ func (p *sqliteEngine) OpenQueue(name string) (types.Queue, error) {
 	}, nil
 }
 
-func (p *sqliteEngine) CreateQueue(name string) (types.Queue, error) {
+func (p *sqliteEngine) CreateQueue(ctx context.Context, name string) (types.Queue, error) {
 	query := fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS %s (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,26 +57,27 @@ func (p *sqliteEngine) CreateQueue(name string) (types.Queue, error) {
 				retrieval INTEGER NOT NULL DEFAULT 0,
 				visible_after INTEGER NOT NULL DEFAULT (strftime('%%s', 'now')),
 				created_at INTEGER NOT NULL DEFAULT (strftime('%%s', 'now')));`, name)
-	_, execErr := p.db.ExecContext(context.Background(), query)
+	_, execErr := p.db.ExecContext(ctx, query)
 	return &sqliteQueue{
 		db:    p.db,
 		table: name,
 	}, errors.Join(execErr)
 }
 
-func (p *sqliteEngine) DeleteQueue(name string) error {
+func (p *sqliteEngine) DeleteQueue(ctx context.Context, name string) error {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s;", name)
-	_, execErr := p.db.ExecContext(context.Background(), query)
+	_, execErr := p.db.ExecContext(ctx, query)
 	return execErr
 }
 
-func (p *sqliteEngine) PurgeQueue(name string) error {
+func (p *sqliteEngine) PurgeQueue(ctx context.Context, name string) error {
 	query := fmt.Sprintf("DELETE FROM %s;", name)
-	_, execErr := p.db.ExecContext(context.Background(), query)
+	_, execErr := p.db.ExecContext(ctx, query)
 	return execErr
 }
 
-func (p *sqliteQueue) ReceiveMessage(fun func(message types.ReceivedMessage), options types.ReceiveMessageOptions) error {
+func (p *sqliteQueue) ReceiveMessage(ctx context.Context, fun func(message types.ReceivedMessage),
+	options types.ReceiveMessageOptions) error {
 	opts := options.Defaults()
 	limit := strconv.Itoa(*opts.MaxNumberOfMessages)
 	if *opts.MaxNumberOfMessages == 0 {
@@ -95,7 +96,7 @@ func (p *sqliteQueue) ReceiveMessage(fun func(message types.ReceivedMessage), op
 		RETURNING id, deduplication_id, payload, priority, visible_after, retrieval, created_at;`,
 			p.table, time.Now().Add(*opts.VisibilityTimeout).Unix(), p.table, time.Now().Unix(), limit)
 
-		rows, err := p.db.QueryContext(context.Background(), query)
+		rows, err := p.db.QueryContext(ctx, query)
 		if err != nil {
 			return err
 		}
@@ -130,12 +131,12 @@ func (p *sqliteQueue) ReceiveMessage(fun func(message types.ReceivedMessage), op
 	}
 }
 
-func (p *sqliteQueue) SendMessage(message *types.Message) error {
-	return p.SendMessageBatch([]*types.Message{message})
+func (p *sqliteQueue) SendMessage(ctx context.Context, message *types.Message) error {
+	return p.SendMessageBatch(ctx, []*types.Message{message})
 }
 
-func (p *sqliteQueue) SendMessageBatch(messages []*types.Message) error {
-	transaction, beginTransactionErr := p.db.BeginTx(context.Background(), nil)
+func (p *sqliteQueue) SendMessageBatch(ctx context.Context, messages []*types.Message) error {
+	transaction, beginTransactionErr := p.db.BeginTx(ctx, nil)
 	if beginTransactionErr != nil {
 		return beginTransactionErr
 	}
@@ -166,45 +167,44 @@ func (p *sqliteQueue) SendMessageBatch(messages []*types.Message) error {
 	return errors.Join(transaction.Commit(), statement.Close())
 }
 
-func (p *sqliteQueue) DeleteMessage(id uint) error {
-	return p.DeleteMessageBatch([]uint{id})
+func (p *sqliteQueue) DeleteMessage(ctx context.Context, id uint) error {
+	return p.DeleteMessageBatch(ctx, []uint{id})
 }
 
-func (p *sqliteQueue) DeleteMessageBatch(ids []uint) error {
+func (p *sqliteQueue) DeleteMessageBatch(ctx context.Context, ids []uint) error {
 	query := fmt.Sprintf(`DELETE FROM %s WHERE id = ?;`, p.table)
-	stmt, err := p.db.PrepareContext(context.Background(), query)
-	if err != nil {
-		return err
+	statement, prepareErr := p.db.PrepareContext(ctx, query)
+	if prepareErr != nil {
+		return prepareErr
 	}
-	defer stmt.Close()
+	defer statement.Close()
 
 	for _, id := range ids {
-		_, err = stmt.Exec(id)
-		if err != nil {
-			return err
+		if _, execErr := statement.Exec(id); execErr != nil {
+			return execErr
 		}
 	}
 
 	return nil
 }
 
-func (p *sqliteQueue) ChangeMessageVisibility(id uint, visibilityTimeout time.Duration) error {
-	return p.ChangeMessageVisibilityBatch([]uint{id}, visibilityTimeout)
+func (p *sqliteQueue) ChangeMessageVisibility(ctx context.Context, id uint, visibilityTimeout time.Duration) error {
+	return p.ChangeMessageVisibilityBatch(ctx, []uint{id}, visibilityTimeout)
 }
 
-func (p *sqliteQueue) ChangeMessageVisibilityBatch(ids []uint, visibilityTimeout time.Duration) error {
+func (p *sqliteQueue) ChangeMessageVisibilityBatch(ctx context.Context, ids []uint,
+	visibilityTimeout time.Duration) error {
 	query := fmt.Sprintf(`UPDATE %s SET visible_after = ? WHERE id = ?;`, p.table)
-	stmt, err := p.db.PrepareContext(context.Background(), query)
-	if err != nil {
-		return err
+	statement, prepareErr := p.db.PrepareContext(ctx, query)
+	if prepareErr != nil {
+		return prepareErr
 	}
-	defer stmt.Close()
+	defer statement.Close()
 
 	visibleAfter := time.Now().Add(visibilityTimeout).Unix()
 	for _, id := range ids {
-		_, err = stmt.Exec(visibleAfter, id)
-		if err != nil {
-			return err
+		if _, execErr := statement.Exec(visibleAfter, id); execErr != nil {
+			return execErr
 		}
 	}
 
